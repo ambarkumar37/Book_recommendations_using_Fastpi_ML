@@ -1,47 +1,53 @@
-from flask import Flask,render_template,request
 import pickle
-import numpy as np
+import streamlit as st
+import requests  # <-- Needed for HTTP POST
+import warnings
+warnings.filterwarnings('ignore')
 
-popular_df = pickle.load(open('popular.pkl','rb'))
-pt = pickle.load(open('pt.pkl','rb'))
-books = pickle.load(open('books.pkl','rb'))
-similarity_scores = pickle.load(open('similarity_scores.pkl','rb'))
+API_URL = "http://127.0.0.1:8000/recommendations"  # FastAPI endpoint
 
-app = Flask(__name__)
+st.header('📚 Book Recommender System Using Machine Learning')
 
-@app.route('/')
-def index():
-    return render_template('index.html',
-                           book_name = list(popular_df['Book-Title'].values),
-                           author=list(popular_df['Book-Author'].values),
-                           image=list(popular_df['Image-URL-M'].values),
-                           votes=list(popular_df['num_ratings'].values),
-                           rating=list(popular_df['avg_rating'].values)
-                           )
+# Load book names for dropdown
+book_names = pickle.load(open('book_names.pkl', 'rb'))
 
-@app.route('/recommend')
-def recommend_ui():
-    return render_template('recommend.html')
+# Dropdown for book selection
+selected_books = st.selectbox(
+    "Type or select a book from the dropdown",
+    book_names
+)
 
-@app.route('/recommend_books',methods=['post'])
-def recommend():
-    user_input = request.form.get('user_input')
-    index = np.where(pt.index == user_input)[0][0]
-    similar_items = sorted(list(enumerate(similarity_scores[index])), key=lambda x: x[1], reverse=True)[1:5]
+# Green button styling
+st.markdown("""
+    <style>
+    div.stButton > button:first-child {
+        background-color: #28a745;
+        color: white;
+        height: 3em;
+        width: 100%;
+        font-size: 18px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-    data = []
-    for i in similar_items:
-        item = []
-        temp_df = books[books['Book-Title'] == pt.index[i[0]]]
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Book-Title'].values))
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Book-Author'].values))
-        item.extend(list(temp_df.drop_duplicates('Book-Title')['Image-URL-M'].values))
+# Show Recommendations
+if st.button('Show Recommendation'):
+    try:
+        # Make API call
+        response = requests.post(API_URL, json={"book_name": selected_books})
 
-        data.append(item)
+        if response.status_code == 200:
+            result = response.json()
+            recommended_books = result['books']
+            poster_url = result['posters']
 
-    print(data)
-
-    return render_template('recommend.html',data=data)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+            # Show 5 columns of recommendations
+            cols = st.columns(5)
+            for i in range(5):
+                with cols[i]:
+                    st.text(recommended_books[i])
+                    st.image(poster_url[i])
+        else:
+            st.error(f"Error from server: {response.status_code} - {response.text}")
+    except Exception as e:
+        st.error(f"API call failed: {e}")
