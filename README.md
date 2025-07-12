@@ -20,3 +20,14 @@ Before running the app, install the required dependencies:
 
 ```bash
 pip install -r requirements.txt
+
+
+Then run the api:
+
+```bash
+uvicorn model:app --reload
+
+Finally run frontend app:
+
+```bash
+streamlit run app.py
